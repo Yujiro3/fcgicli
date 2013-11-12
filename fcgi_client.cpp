@@ -14,6 +14,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 
 #include <cstring>
@@ -88,6 +89,10 @@ namespace fcgi {
      * @return String
      */
     std::string client::request(std::string stdin) {
+        std::stringstream conlength;
+        conlength << stdin.length();
+        
+        params["CONTENT_LENGTH"] = conlength.str();
         record.clear();
 
         std::string head("");
