@@ -82,46 +82,42 @@ namespace fcgi {
     }
 
     /**
+     * Execute a send to the FastCGI application
+     *
+     * @access public
+     * @param String stdin Content
+     * @return String
+     */
+    bool client::send(std::string *stdin) {
+        _buildRecord(stdin);
+
+        if (!_connect()) {
+            return false;
+        }
+        
+        write(sock, record.data(), record.size());
+
+        if (sock > 0) {
+            close(sock);
+        }
+
+        return true;
+    }
+
+    /**
      * Execute a request to the FastCGI application
      *
      * @access public
      * @param String stdin Content
      * @return String
      */
-    std::string client::request(std::string stdin) {
-        std::stringstream conlength;
-        conlength << stdin.length();
-        
-        params["CONTENT_LENGTH"] = conlength.str();
-        record.clear();
-
-        std::string head("");
-        head += char(0);
-        head += char(1);    // Responder
-        head += char(0);    // Keep alive
-        head += char(0); head += char(0); head += char(0); head += char(0); head += char(0);
-        _buildPacket(BEGIN_REQUEST, head, 1);
-        
-        std::string paramsRequest("");
-        array_t::iterator rows;
-        for (rows = params.begin(); rows != params.end(); rows++) {
-            paramsRequest += _buildNvpair((*rows).first, (*rows).second);
-        }
-
-        if (paramsRequest.size() > 0) {
-            _buildPacket(PARAMS, paramsRequest, 1);
-        }
-        _buildPacket(PARAMS, "", 1);
-
-        if (stdin.size() > 0) {
-            _buildPacket(STDIN, stdin, 1);
-        }
-        _buildPacket(STDIN, "", 1);
+    std::string client::request(std::string *stdin) {
+        _buildRecord(stdin);
 
         if (!_connect()) {
             return std::string("Unable to connect to FastCGI application.");
         }
-        write(sock, record.c_str(), record.size());
+        write(sock, record.data(), record.size());
 
         do {
             _readPacket();
@@ -145,6 +141,45 @@ namespace fcgi {
     }
 
     /**
+     * レコードの作成
+     *
+     * @access public
+     * @param String stdin Content
+     * @return void
+     */
+    void client::_buildRecord(std::string *stdin) {
+        std::stringstream conlength;
+        conlength << stdin->length();
+        
+        params["CONTENT_LENGTH"] = conlength.str();
+        record.clear();
+
+        std::string head("");
+        head += char(0);
+        head += char(1);    // Responder
+        head += char(0);    // Keep alive
+        head += char(0); head += char(0); head += char(0); head += char(0); head += char(0);
+        _buildPacket(BEGIN_REQUEST, &head, 1);
+        
+        std::string paramsRequest("");
+        array_t::iterator rows;
+        for (rows = params.begin(); rows != params.end(); rows++) {
+            paramsRequest += _buildNvpair((*rows).first, (*rows).second);
+        }
+
+        std::string empty("");
+        if (paramsRequest.size() > 0) {
+            _buildPacket(PARAMS, &paramsRequest, 1);
+        }
+        _buildPacket(PARAMS, &empty, 1);
+
+        if (stdin->size() > 0) {
+            _buildPacket(STDIN, stdin, 1);
+        }
+        _buildPacket(STDIN, &empty, 1);
+    }
+
+    /**
      * パケット作成
      *
      * @access private
@@ -152,24 +187,24 @@ namespace fcgi {
      * @param  string content
      * @param  int requestId
      */
-    void client::_buildPacket(int type, std::string content, int requestId) {
-        int contentLength = content.size();
+    void client::_buildPacket(int type, std::string *content, int requestId) {
+        int contentLength = content->size();
 
         assert(contentLength >= 0 && contentLength <= MAX_LENGTH);
         
-        record += char(VERSION);                        // version
-        record += char(type);                           // type
-        record += char((requestId     >> 8) & 0xff);    // requestIdB1
-        record += char((requestId         ) & 0xff);    // requestIdB0
-        record += char((contentLength >> 8) & 0xff);    // contentLengthB1
-        record += char((contentLength     ) & 0xff);    // contentLengthB0
-        record += char(0);                              // paddingLength
-        record += char(0);                              // reserved
-        record += content;                              // content
+        record += char(VERSION);                            // version
+        record += char(type);                               // type
+        record += char((requestId     >> 8) & 0xff);        // requestIdB1
+        record += char((requestId         ) & 0xff);        // requestIdB0
+        record += char((contentLength >> 8) & 0xff);        // contentLengthB1
+        record += char((contentLength     ) & 0xff);        // contentLengthB0
+        record += char(0);                                  // paddingLength
+        record += char(0);                                  // reserved
+        record.append(content->data(), content->size());    // content
     }
 
     /**
-     * Build an FastCGI Name value pair
+     * FastCGIヘッダー部分の作製
      *
      * @access private
      * @param string name Name
@@ -181,22 +216,22 @@ namespace fcgi {
         
         int nlen = name.size();
         if (nlen < 128) {
-            nvpair  = (unsigned char) nlen;                     // valueLengthB0
+            nvpair  = (unsigned char) nlen;                     // name LengthB0
         } else {
-            nvpair  = (unsigned char) ((nlen >> 24) | 0x80);    // valueLengthB3
-            nvpair += (unsigned char) ((nlen >> 16) & 0xff);    // valueLengthB2
-            nvpair += (unsigned char) ((nlen >>  8) & 0xff);    // valueLengthB1
-            nvpair += (unsigned char) (nlen & 0xff);            // valueLengthB0
+            nvpair  = (unsigned char) ((nlen >> 24) | 0x80);    // name LengthB3
+            nvpair += (unsigned char) ((nlen >> 16) & 0xff);    // name LengthB2
+            nvpair += (unsigned char) ((nlen >>  8) & 0xff);    // name LengthB1
+            nvpair += (unsigned char) (nlen & 0xff);            // name LengthB0
         }
     
         int vlen = value.size();
         if (vlen < 128) {
-            nvpair += (unsigned char) vlen;                     // valueLengthB0
+            nvpair += (unsigned char) vlen;                     // value LengthB0
         } else {
-            nvpair += (unsigned char) ((vlen >> 24) | 0x80);    // valueLengthB3
-            nvpair += (unsigned char) ((vlen >> 16) & 0xff);    // valueLengthB2
-            nvpair += (unsigned char) ((vlen >>  8) & 0xff);    // valueLengthB1
-            nvpair += (unsigned char) (vlen & 0xff);            // valueLengthB0
+            nvpair += (unsigned char) ((vlen >> 24) | 0x80);    // value LengthB3
+            nvpair += (unsigned char) ((vlen >> 16) & 0xff);    // value LengthB2
+            nvpair += (unsigned char) ((vlen >>  8) & 0xff);    // value LengthB1
+            nvpair += (unsigned char) (vlen & 0xff);            // value LengthB0
         }
         nvpair += name + value;
     
@@ -226,7 +261,7 @@ namespace fcgi {
     }
 
     /**
-     * Read a FastCGI Packet
+     * パケットの読み込み
      *
      * @access private
      * @return void
@@ -262,7 +297,7 @@ namespace fcgi {
     }
 
     /**
-     * Create a connection to the FastCGI application
+     * FastCGIサーバへ接続
      *
      * @access private
      * @return void

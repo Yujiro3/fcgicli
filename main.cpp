@@ -35,7 +35,6 @@ int main(int argc, char **argv) {
 
     string response, contents("values");
     stringstream conlength;
-    conlength << contents.length();
 
     char dir[255];
     getcwd(dir, sizeof(dir));
@@ -47,11 +46,14 @@ int main(int argc, char **argv) {
     fcgcli.params["SERVER_SOFTWARE"]   = "cpp/fcgi_client";
     fcgcli.params["SERVER_PROTOCOL"]   = "HTTP/1.1";
     fcgcli.params["CONTENT_TYPE"]      = "application/x-www-form-urlencoded";
-    fcgcli.params["CONTENT_LENGTH"]    = conlength.str();
 
     fcgcli.params["Original-Key"] = "originkey";
 
-    response = fcgcli.request(contents);
+    try {
+        response = fcgcli.request(&contents);
+    } catch (const char* errmsg) {
+        cerr << errmsg << endl;
+    }
     
     cout << response << endl;
 

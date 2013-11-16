@@ -219,15 +219,33 @@ namespace fcgi {
         ~client();
 
         /**
+         * Execute a send to the FastCGI application
+         *
+         * @access public
+         * @param String stdin Content
+         * @return boolean
+         */
+        bool send(std::string *stdin);
+
+        /**
          * Execute a request to the FastCGI application
          *
          * @access public
          * @param String stdin Content
          * @return String
          */
-        std::string request(std::string stdin);
+        std::string request(std::string *stdin);
     
     private:
+        /**
+         * レコードの作成
+         *
+         * @access public
+         * @param String stdin Content
+         * @return void
+         */
+        void _buildRecord(std::string *stdin);
+
         /**
          * 送信パケット作成
          *
@@ -236,10 +254,10 @@ namespace fcgi {
          * @param  string content
          * @param  int requestId
          */
-        void _buildPacket(int type, std::string content, int requestId);
+        void _buildPacket(int type, std::string *content, int requestId);
 
         /**
-         * Build an FastCGI Name value pair
+         * FastCGIヘッダー部分の作製
          *
          * @access private
          * @param string name Name
@@ -257,7 +275,7 @@ namespace fcgi {
         void _readPacketHeader();
 
         /**
-         * Responseの受取
+         * パケットの読込
          *
          * @access private
          * @return void
@@ -265,7 +283,7 @@ namespace fcgi {
         void _readPacket();
     
         /**
-         * Create a connection to the FastCGI application
+         * FastCGIサーバへ接続
          *
          * @access private
          * @return boolean
